@@ -1,72 +1,63 @@
 import cv2
+import time
 
-cap = cv2.VideoCapture(0)
+import filters
+import effects
+import ui
 
-mode = 0
+cap = cv2.VideoCapture(0)#apre la webcam
+
+mode = 0    #filtro attuale
+prev_time = 0   #per calcolo fps
 
 def get_mode_name(mode):
+    #ritorna dizionario, se modalita non presente ritorna sconosciuto
     return {
         0: "Normale",
         1: "Bianco e Nero",
         2: "Negativo",
         3: "Termico",
         4: "Soffuso",
-        5: "Blurred"
+        5: "Blur",
+        6: "Cartoon"
     }.get(mode, "Sconosciuto")
 
 while True:
-    ret, frame = cap.read()
+    ret, frame = cap.read() #legge frame dalla webcam
     if not ret:
-        break
+        break   #esce dal loop se non riesce a leggerlo
 
-    # Applica effetti
+    current_time = time.time()  #tempo attuale in secondi
+    fps = 1 / (current_time - prev_time) if prev_time != 0 else 0   #serve a gestire se il primo frame è 0
+    prev_time = current_time   #aggiorna il tempo precedente
+
+    #face detection
+    frame, faces = effects.detect_faces(frame)
+
+    #filtri
     if mode == 1:
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        frame = filters.grayscale(frame)
     elif mode == 2:
-        frame = cv2.bitwise_not(frame)
+        frame = filters.negative(frame)
     elif mode == 3:
-        frame = cv2.applyColorMap(frame, cv2.COLORMAP_JET)
+        frame = filters.thermal(frame)
     elif mode == 4:
-        frame = cv2.GaussianBlur(frame, (15, 15), 0)
+        frame = filters.blur_soft(frame)
     elif mode == 5:
-        frame = cv2.GaussianBlur(frame, (35, 35), 0)
-
-    # Se è grayscale → torna a BGR per scrivere testo
-    if len(frame.shape) == 2:
-        frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
-
-    h, w = frame.shape[:2]
-
-    # Testo modalità (in basso)
-    text = f"Modalita: {get_mode_name(mode)}"
-    cv2.putText(frame, text, (10, h - 40),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7,
-                (0, 255, 0), 2, cv2.LINE_AA)
-
-    # Legenda comandi (ancora più in basso)
-    legenda = "1:B/N  2:Neg  3:Termico  4:Soffuso  5:Blur  0:Normale  q:Esci"
-    cv2.putText(frame, legenda, (10, h - 10),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                (255, 255, 255), 1, cv2.LINE_AA)
-
-    cv2.imshow('Webcam', frame)
-
-    key = cv2.waitKey(1) & 0xFF
+        frame = filters.blur_strong(frame)
+    elif mode == 6:
+        frame = filters.cartoon(frame)
+    #ui
+    frame = ui.draw_hud(frame, get_mode_name(mode), fps, len(faces))
+    cv2.imshow("Webcam", frame)  #mostra finestra video
+    key = cv2.waitKey(1) #legge il tasto che viene premuto
 
     if key == ord('q'):
         break
-    elif key == ord('1'):
-        mode = 1
-    elif key == ord('2'):
-        mode = 2
-    elif key == ord('3'):
-        mode = 3
-    elif key == ord('4'):
-        mode = 4
-    elif key == ord('5'):
-        mode = 5
-    elif key == ord('0'):
-        mode = 0
+    if ord('0') <= key <= ord('6'):  #se tasto premuto è tra 0 e 6, in codice ascii del carattere
+        #converte il codice ASCII in numero
+        #esempio: '3' → 51 ASCII → 51 - 48 = 3
+        mode = key - ord('0')
 
-cap.release()
-cv2.destroyAllWindows()
+cap.release()  #rilascia la cam
+cv2.destroyAllWindows()   #chiude finestre opencv
